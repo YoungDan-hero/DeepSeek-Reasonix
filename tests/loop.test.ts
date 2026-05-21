@@ -1,12 +1,19 @@
 /** CacheFirstLoop integration — fake-fetch DeepSeekClient, non-streaming path. */
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DeepSeekClient, Usage } from "../src/client.js";
+import {
+  HISTORY_FOLD_AGGRESSIVE_THRESHOLD,
+  HISTORY_FOLD_THRESHOLD,
+} from "../src/context-manager.js";
 import { type ConfirmationChoice, PauseGate } from "../src/core/pause-gate.js";
 import { CacheFirstLoop } from "../src/loop.js";
 import { ImmutablePrefix } from "../src/memory/runtime.js";
+import { DEEPSEEK_CONTEXT_TOKENS } from "../src/telemetry/stats.js";
 import { ToolRegistry } from "../src/tools.js";
 import type { ChatMessage } from "../src/types.js";
+
+const FOLD_TEST_MODEL = "test-fold-ctx";
 
 interface FakeResponseShape {
   content?: string;
@@ -56,6 +63,10 @@ function makeClient(responses: FakeResponseShape[]) {
 }
 
 describe("CacheFirstLoop (non-streaming)", () => {
+  afterEach(() => {
+    delete DEEPSEEK_CONTEXT_TOKENS[FOLD_TEST_MODEL];
+  });
+
   it("completes a single-turn plain chat", async () => {
     const client = makeClient([{ content: "hi there" }]);
     const loop = new CacheFirstLoop({
@@ -603,7 +614,15 @@ describe("CacheFirstLoop (non-streaming)", () => {
     expect(loop.log.length).toBe(4);
   });
 
-  it("auto-folds history when promptTokens crosses 50% of ctxMax", async () => {
+  it("auto-folds history when promptTokens crosses the normal fold threshold", async () => {
+    // Shrink ctxMax so the seed log can trip the auto-fold threshold without
+    // also exceeding the preflight byte ceiling (~700 KB by default).
+    DEEPSEEK_CONTEXT_TOKENS[FOLD_TEST_MODEL] = 100_000;
+    // Aim just past the normal threshold but below the aggressive band.
+    const tripPrompt = Math.ceil(
+      100_000 *
+        (HISTORY_FOLD_THRESHOLD + (HISTORY_FOLD_AGGRESSIVE_THRESHOLD - HISTORY_FOLD_THRESHOLD) / 2),
+    );
     const reg = new ToolRegistry();
     reg.register({
       name: "probe",
@@ -612,16 +631,15 @@ describe("CacheFirstLoop (non-streaming)", () => {
       fn: async () => "ok",
     });
     const responses: FakeResponseShape[] = [
-      // Iter 0: tool call with usage above 50% of 1M ctx.
       {
         content: "",
         tool_calls: [{ id: "c1", type: "function", function: { name: "probe", arguments: "{}" } }],
         usage: {
-          prompt_tokens: 600_000,
+          prompt_tokens: tripPrompt,
           completion_tokens: 10,
-          total_tokens: 600_010,
-          prompt_cache_hit_tokens: 500_000,
-          prompt_cache_miss_tokens: 100_000,
+          total_tokens: tripPrompt + 10,
+          prompt_cache_hit_tokens: Math.floor(tripPrompt * 0.8),
+          prompt_cache_miss_tokens: Math.ceil(tripPrompt * 0.2),
         },
       },
       // Summary call response (compactHistory).
@@ -636,12 +654,12 @@ describe("CacheFirstLoop (non-streaming)", () => {
       tools: reg,
       stream: false,
       maxToolIters: 8,
+      model: FOLD_TEST_MODEL,
     });
-    // Seed 18 user/assistant turns sized so the LOG estimate stays
-    // below the 95% preflight threshold (otherwise preflight folds
-    // first and the auto-fold path never runs). The mocked usage of
-    // 600k below is what trips the auto-fold check, independent of the
-    // tokenizer's view of the seed.
+    // Seed 18 user/assistant turns sized so the LOG estimate stays below both
+    // preflight signals (95% of token ctx AND the byte ceiling) — otherwise
+    // preflight folds first and the auto-fold path never runs. The mocked usage
+    // of 600k below is what trips the auto-fold check.
     const fillLines = (label: string, n: number) =>
       Array.from(
         { length: n },
@@ -649,8 +667,8 @@ describe("CacheFirstLoop (non-streaming)", () => {
           `${label} line ${i}: lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.`,
       ).join("\n");
     for (let i = 0; i < 18; i++) {
-      loop.log.append({ role: "user", content: `Q${i}\n${fillLines(`q${i}`, 400)}` });
-      loop.log.append({ role: "assistant", content: `A${i}\n${fillLines(`a${i}`, 400)}` });
+      loop.log.append({ role: "user", content: `Q${i}\n${fillLines(`q${i}`, 100)}` });
+      loop.log.append({ role: "assistant", content: `A${i}\n${fillLines(`a${i}`, 100)}` });
     }
     const beforeMessages = loop.log.length;
 
@@ -667,7 +685,12 @@ describe("CacheFirstLoop (non-streaming)", () => {
     expect(loop.log.length).toBeLessThan(beforeMessages);
   }, 30_000);
 
-  it("uses the aggressive fold tier when promptTokens crosses 70% of ctxMax", async () => {
+  it("uses the aggressive fold tier when promptTokens crosses the aggressive threshold", async () => {
+    DEEPSEEK_CONTEXT_TOKENS[FOLD_TEST_MODEL] = 100_000;
+    // Halfway between the aggressive threshold and the force-summary line at 0.8.
+    const tripPrompt = Math.ceil(
+      100_000 * (HISTORY_FOLD_AGGRESSIVE_THRESHOLD + (0.8 - HISTORY_FOLD_AGGRESSIVE_THRESHOLD) / 2),
+    );
     const reg = new ToolRegistry();
     reg.register({
       name: "probe",
@@ -676,16 +699,15 @@ describe("CacheFirstLoop (non-streaming)", () => {
       fn: async () => "ok",
     });
     const responses: FakeResponseShape[] = [
-      // Iter 0: usage at 75% of 1M ctx — squarely in the aggressive band.
       {
         content: "",
         tool_calls: [{ id: "c1", type: "function", function: { name: "probe", arguments: "{}" } }],
         usage: {
-          prompt_tokens: 750_000,
+          prompt_tokens: tripPrompt,
           completion_tokens: 10,
-          total_tokens: 750_010,
-          prompt_cache_hit_tokens: 600_000,
-          prompt_cache_miss_tokens: 150_000,
+          total_tokens: tripPrompt + 10,
+          prompt_cache_hit_tokens: Math.floor(tripPrompt * 0.8),
+          prompt_cache_miss_tokens: Math.ceil(tripPrompt * 0.2),
         },
       },
       // Summary call (compactHistory).
@@ -700,6 +722,7 @@ describe("CacheFirstLoop (non-streaming)", () => {
       tools: reg,
       stream: false,
       maxToolIters: 8,
+      model: FOLD_TEST_MODEL,
     });
     const fillLines = (label: string, n: number) =>
       Array.from(
@@ -708,8 +731,8 @@ describe("CacheFirstLoop (non-streaming)", () => {
           `${label} line ${i}: lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.`,
       ).join("\n");
     for (let i = 0; i < 18; i++) {
-      loop.log.append({ role: "user", content: `Q${i}\n${fillLines(`q${i}`, 400)}` });
-      loop.log.append({ role: "assistant", content: `A${i}\n${fillLines(`a${i}`, 400)}` });
+      loop.log.append({ role: "user", content: `Q${i}\n${fillLines(`q${i}`, 100)}` });
+      loop.log.append({ role: "assistant", content: `A${i}\n${fillLines(`a${i}`, 100)}` });
     }
 
     const events: { role: string; content?: string }[] = [];

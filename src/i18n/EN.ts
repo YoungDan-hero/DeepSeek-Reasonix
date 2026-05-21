@@ -672,11 +672,11 @@ export const EN: TranslationSchema = {
     toolUploadStatus: "tool result uploaded · model thinking before next response…",
     preflightTruncateStatus: "preflight: context near full, truncating oldest history…",
     preflightTruncated:
-      "preflight: request ~{estimate}/{ctxMax} tokens ({pct}%) — truncated {beforeMessages} messages → {afterMessages}. Sending.",
+      "preflight: request ~{estimate}/{ctxMax} tokens ({pct}%) · body {bodyKB} KB — truncated {beforeMessages} messages → {afterMessages}. Sending.",
     preflightTruncatedStillFull:
-      "preflight: request still ~{estimate}/{ctxMax} tokens ({pct}%) after truncating {beforeMessages} messages → {afterMessages}. DeepSeek will likely 400. Run /clear or /new to start fresh.",
+      "preflight: request still ~{estimate}/{ctxMax} tokens ({pct}%) · body {bodyKB} KB after truncating {beforeMessages} messages → {afterMessages}. DeepSeek will likely 400. Run /clear or /new to start fresh.",
     preflightNoFold:
-      "preflight: request ~{estimate}/{ctxMax} tokens ({pct}%) and nothing left to truncate — DeepSeek will likely 400. Run /clear or /new to start fresh.",
+      "preflight: request ~{estimate}/{ctxMax} tokens ({pct}%) · body {bodyKB} KB and nothing left to truncate — DeepSeek will likely 400. Run /clear or /new to start fresh.",
     flashEscalation: "⇧ flash requested escalation — retrying this turn on {model}{reasonSuffix}",
     harvestStatus: "extracting plan state from reasoning…",
     repeatToolCallWarning:
@@ -1050,6 +1050,13 @@ export const EN: TranslationSchema = {
       statusMcp: "  mcp     {servers} server(s), {tools} tool(s) in registry",
       statusEdits: "  edits   {count} pending (/apply to commit, /discard to drop)",
       statusPlan: "  plan    ON — writes gated (submit_plan + approval)",
+      statusLifecycle: "  lifecycle {mode}/{state} · {progress}{evidence}",
+      lifecycleNoPlan: "no plan",
+      lifecycleEvidencePending: "evidence pending",
+      lifecycleRejected: "lifecycle: {tool} blocked in {state} — next: {next}",
+      lifecycleEvidenceRejected: "lifecycle: step {stepId} needs evidence — next: {next}",
+      lifecycleRepeatedRejected:
+        "lifecycle: repeated {tool} rejection — do not retry identical args",
       statusModeYolo:
         "  mode    YOLO — edits + shell auto-run with no prompt (/undo still rolls back · Shift+Tab to flip)",
       statusModeAuto:

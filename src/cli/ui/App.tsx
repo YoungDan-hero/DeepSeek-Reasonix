@@ -1,6 +1,6 @@
 import { type WriteStream, statSync } from "node:fs";
 import { relative, resolve } from "node:path";
-import { derivePrefix } from "@reasonix/core-utils";
+import { derivePrefix, toApprovalPrompt } from "@reasonix/core-utils";
 import { Box, Text, useStdin, useStdout } from "ink";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -2874,6 +2874,9 @@ function AppInner({
             status: qq.status,
           },
           sessionId: session,
+          getEngineeringLifecycleSnapshot: codeMode
+            ? () => engineeringLifecycleRef.current?.snapshot() ?? null
+            : undefined,
           jobs: codeMode?.jobs,
           postInfo: fromQQ ? qq.sendInfo : log.pushInfo,
           postDoctor: (checks) => log.showDoctor(checks),
@@ -4540,21 +4543,31 @@ function AppInner({
                   />
                 ) : pendingShell ? (
                   <ShellConfirm
-                    command={pendingShell.command}
-                    allowPrefix={derivePrefix(pendingShell.command)}
-                    kind={pendingShell.kind}
-                    cwd={pendingShell.cwd}
-                    timeoutSec={pendingShell.timeoutSec}
-                    waitSec={pendingShell.waitSec}
+                    prompt={toApprovalPrompt({
+                      id: pendingShell.id,
+                      kind: pendingShell.kind,
+                      payload: {
+                        command: pendingShell.command,
+                        cwd: pendingShell.cwd,
+                        timeoutSec: pendingShell.timeoutSec,
+                        waitSec: pendingShell.waitSec,
+                      },
+                    })}
                     onChoose={handleShellConfirm}
                   />
                 ) : pendingPath ? (
                   <PathConfirm
-                    path={pendingPath.path}
-                    intent={pendingPath.intent}
-                    toolName={pendingPath.toolName}
-                    sandboxRoot={pendingPath.sandboxRoot}
-                    allowPrefix={pendingPath.allowPrefix}
+                    prompt={toApprovalPrompt({
+                      id: pendingPath.id,
+                      kind: "path_access",
+                      payload: {
+                        path: pendingPath.path,
+                        intent: pendingPath.intent,
+                        toolName: pendingPath.toolName,
+                        sandboxRoot: pendingPath.sandboxRoot,
+                        allowPrefix: pendingPath.allowPrefix,
+                      },
+                    })}
                     onChoose={handlePathConfirm}
                   />
                 ) : pendingEditReview ? (

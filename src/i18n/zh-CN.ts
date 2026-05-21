@@ -651,11 +651,11 @@ export const zhCN: TranslationSchema = {
     toolUploadStatus: "工具结果已上传 · 模型在生成下一条响应前思考中…",
     preflightTruncateStatus: "预检：上下文接近上限，正在裁剪最早历史…",
     preflightTruncated:
-      "预检：请求约 {estimate}/{ctxMax} tokens（{pct}%）— 已裁剪 {beforeMessages} 条消息 → {afterMessages}。发送中。",
+      "预检：请求约 {estimate}/{ctxMax} tokens（{pct}%）· body {bodyKB} KB — 已裁剪 {beforeMessages} 条消息 → {afterMessages}。发送中。",
     preflightTruncatedStillFull:
-      "预检：裁剪 {beforeMessages} 条消息 → {afterMessages} 后，请求仍约 {estimate}/{ctxMax} tokens（{pct}%）— DeepSeek 大概率会返回 400。请运行 /clear 或 /new 重新开始。",
+      "预检：裁剪 {beforeMessages} 条消息 → {afterMessages} 后，请求仍约 {estimate}/{ctxMax} tokens（{pct}%）· body {bodyKB} KB — DeepSeek 大概率会返回 400。请运行 /clear 或 /new 重新开始。",
     preflightNoFold:
-      "预检：请求约 {estimate}/{ctxMax} tokens（{pct}%）且没有可裁剪的内容 — DeepSeek 大概率会返回 400。请运行 /clear 或 /new 重新开始。",
+      "预检：请求约 {estimate}/{ctxMax} tokens（{pct}%）· body {bodyKB} KB 且没有可裁剪的内容 — DeepSeek 大概率会返回 400。请运行 /clear 或 /new 重新开始。",
     flashEscalation: "⇧ flash 请求升级 — 本轮改用 {model}{reasonSuffix}",
     harvestStatus: "正在从推理过程提取计划状态…",
     repeatToolCallWarning: "拦截到重复工具调用 — 让模型察觉问题并换种方式重试。",
@@ -993,6 +993,12 @@ export const zhCN: TranslationSchema = {
       statusMcp: "  MCP     {servers} 个服务器，注册表中 {tools} 个工具",
       statusEdits: "  编辑    {count} 个待处理（/apply 提交，/discard 丢弃）",
       statusPlan: "  计划    开启 — 写入受限（submit_plan + 审批）",
+      statusLifecycle: "  生命周期 {mode}/{state} · {progress}{evidence}",
+      lifecycleNoPlan: "暂无计划",
+      lifecycleEvidencePending: "等待 evidence",
+      lifecycleRejected: "lifecycle：{tool} 在 {state} 状态被拦截 — 下一步：{next}",
+      lifecycleEvidenceRejected: "lifecycle：步骤 {stepId} 需要 evidence — 下一步：{next}",
+      lifecycleRepeatedRejected: "lifecycle：{tool} 被重复拦截 — 不要用相同参数反复重试",
       statusModeYolo:
         "  模式    YOLO — 编辑 + shell 自动运行，无提示（/undo 仍可回滚 · Shift+Tab 切换）",
       statusModeAuto: "  模式    AUTO — 编辑立即应用（5 秒内按 u 撤消 · Shift+Tab 切换）",
