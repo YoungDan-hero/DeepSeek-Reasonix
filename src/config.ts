@@ -370,7 +370,13 @@ function sanitizeStringArrayField(
 
 export function readConfig(path: string = defaultConfigPath()): ReasonixConfig {
   try {
-    const raw = readFileSync(path, "utf8");
+    // Strip the UTF-8 BOM if a foreign writer left one in — Windows
+    // PowerShell 5's `Set-Content -Encoding UTF8` and several text
+    // editors emit `EF BB BF` at the head of the file. `JSON.parse`
+    // refuses BOM-prefixed input and throws, which used to fall
+    // through to `return {}` and silently nuke every saved field on
+    // the next read-modify-write.
+    const raw = readFileSync(path, "utf8").replace(/^\uFEFF/, "");
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       const cfg = parsed as Record<string, unknown>;
